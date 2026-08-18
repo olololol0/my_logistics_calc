@@ -32,17 +32,17 @@ st.markdown("---")  # Разделительная линия
 
 # Создаем красивую карточку с полями ввода
 with st.container():
-    st.subheader("📐 Габариты посылки")
+    st.subheader("📐 Габариты посылки (см)")
 
     # Поля ввода для чисел с плавающей точкой (минимальное значение 0.0)
     length = st.number_input(
-        "Длина (см)", min_value=0.0, value=20.0, step=1.0
+        "Длина", min_value=0.0, value=20.0, step=1.0
     )
     width = st.number_input(
-        "Ширина (см)", min_value=0.0, value=15.0, step=1.0
+        "Ширина", min_value=0.0, value=15.0, step=1.0
     )
     height = st.number_input(
-        "Высота (см)", min_value=0.0, value=10.0, step=1.0
+        "Высота", min_value=0.0, value=10.0, step=1.0
     )
 
 st.markdown("---")
