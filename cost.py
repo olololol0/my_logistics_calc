@@ -3,7 +3,7 @@ import pandas as pd
 
 # Настройка страницы
 st.set_page_config(
-    page_title="Калькулятор стоимости посылки", page_icon="🧮", layout="centered"
+    page_title="Стоимость доставки", page_icon="🧮", layout="centered"
 )
 
 # --- БЛОК СТИЛЕЙ С ЧЕРНЫМ ШРИФТОМ И КРУПНОЙ КНОПКОЙ ---
@@ -17,7 +17,7 @@ st.markdown(
             color: inherit !important;
         }
         
-        /* 2. Окрашивание полей ввода и ЧЕРНЫЙ ЦВЕТ ЦИФР */
+        /* 2. Окрашивание полей ввода и цифр */
         div[data-testid="stNumberInput"] input {
             font-size: 26px !important;
             font-weight: bold !important;
@@ -58,7 +58,7 @@ st.markdown(
             margin-bottom: 20px !important;
         }
 
-        /* 5. СТИЛИ ДЛЯ КНОПКИ РАССЧЕТА */
+        /* 5. Кнопка расчета */
         div[data-testid="stButton"] button {
             height: 65px !important;
             min-height: 65px !important;
@@ -75,7 +75,7 @@ st.markdown(
 # ----------------------------------------
 
 # Тарифные данные и коэффициенты
-DATA = {50: 1690, 100: 4730, 200: 12787, 300: 28611}
+DATA = {50: 1690, 100: 4730, 200: 12787, 300: 28611,400:63000,500:78960,600:126084,700:128000}
 A_COEFF = 3.788485572
 B_COEFF = 1.551492140
 
@@ -94,7 +94,7 @@ def price_for_volume(volume):
 
 
 # Оформление интерфейса сайта
-st.title("Калькулятор стоимости")
+st.title("Стоимость доставки")
 st.write("Выберите подходящий вариант для расчета объема и стоимости посылок.")
 
 st.markdown("---")
@@ -102,7 +102,7 @@ st.markdown("---")
 # Создаем три вкладки
 tab1, tab2, tab3 = st.tabs([
     "📦 Одна посылка", 
-    "📦🔢 Несколько одинаковых", 
+    "🔢 Несколько одинаковых", 
     "🛍️ Несколько разных"
 ])
 
