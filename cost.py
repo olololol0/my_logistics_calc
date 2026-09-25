@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import math
 
 # Настройка страницы
 st.set_page_config(
     page_title="Стоимость доставки", page_icon="🧮", layout="centered"
 )
 
-# --- БЛОК СТИЛЕЙ ---
+# --- СТИЛИ ---
 st.markdown(
     """
     <style>
@@ -52,52 +54,54 @@ st.markdown(
             font-size: 24px !important;
             font-weight: bold !important;
         }
+        div[data-testid="stSelectbox"] label p {
+            font-size: 20px !important;
+            font-weight: bold !important;
+        }
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+            font-size: 20px !important;
+            font-weight: bold !important;
+            min-height: 55px !important;
+            background-color: #d1e7dd !important;
+            border: 2px solid #a3cfbb !important;
+            border-radius: 8px !important;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # ================= ТАРИФНЫЕ ДАННЫЕ =================
-# КЛЮЧ = цена в рублях, ЗНАЧЕНИЕ = максимальный объём в см³ за эту цену
-import numpy as np
-
-# КЛЮЧ = цена в рублях, ЗНАЧЕНИЕ = максимальный объём в см³
 DATA = {
     50: 1690,
     100: 4730,
     200: 12787,
     300: 28611,
     400: 63000,
-    500: 78000,
-    600: 126000,
-    700: 130000,
+    500: 78960,
+    600: 126084,
+    700: 128000,
 }
 
-# Коэффициенты для экстраполяции выше 700 ₽ (volume = A * price^B)
 A_COEFF = 3.788485572
 B_COEFF = 1.551492140
 
-# Подготовка массивов для интерполяции
 _PRICES = np.array(sorted(DATA.keys()), dtype=float)
-_VOLS   = np.array([DATA[p] for p in sorted(DATA.keys())], dtype=float)
+_VOLS = np.array([DATA[p] for p in sorted(DATA.keys())], dtype=float)
 
 MAX_PRICE = 10000
 PRICE_STEP = 50
 
 
 def volume_for_price(price: float) -> float:
-    """Максимальный объём (см³) за заданную цену."""
     if price <= _PRICES[0]:
         return float(_VOLS[0])
     if price <= _PRICES[-1]:
-        # Линейная интерполяция между известными точками
         return float(np.interp(price, _PRICES, _VOLS))
-    # Экстраполяция выше 700 ₽
     return A_COEFF * (price ** B_COEFF)
 
 
 def price_for_volume(volume: float) -> int:
-    """Минимальная цена (шаг 50 ₽), при которой volume <= volume_for_price(price)."""
     if volume <= 0:
         return 0
     for price in range(PRICE_STEP, MAX_PRICE + PRICE_STEP, PRICE_STEP):
@@ -106,71 +110,100 @@ def price_for_volume(volume: float) -> int:
     return MAX_PRICE
 
 
+def volume_box(l, w, h):
+    return l * w * h
+
+
+def volume_cylinder(d, h):
+    r = d / 2.0
+    return math.pi * r * r * h
+
+
 # ================= ИНТЕРФЕЙС =================
-st.title("Стоимость доставки")
-st.write("Выберите подходящий вариант для расчета объема и стоимости посылок.")
+st.title("Стоимость доставки📦")
 st.markdown("---")
 
-tab1, tab2, tab3 = st.tabs([
-    "📦 Одна посылка",
-    "🔢 Несколько одинаковых",
-    "🛍️ Несколько разных"
-])
+# --- Шаг 1: выбор формы ---
+shape = st.selectbox(
+    "Форма посылки",
+    options=["📦Коробка", "🛢️Цилиндр(банка, ведро и тд)"],
+    key="shape",
+)
 
-# ---------- ВКЛАДКА 1 ----------
-with tab1:
+# --- Шаг 2: тип расчёта (зависит от формы) ---
+if shape == "📦Коробка":
+    mode_options = ["Одна посылка", "Несколько одинаковых", "Несколько разных"]
+else:
+    mode_options = ["Одна посылка", "Несколько одинаковых", "Несколько разных"]
+
+# ВАЖНО: при смене shape список опций меняется —
+# чтобы избежать конфликта сохранённого значения, используем отдельные ключи
+mode_key = f"mode_{shape}"
+if mode_key not in st.session_state:
+    st.session_state[mode_key] = mode_options[0]
+
+mode = st.selectbox(
+    "Тип расчёта",
+    options=mode_options,
+    key=mode_key,
+)
+
+st.markdown("---")
+
+# ================= ЛОГИКА =================
+
+# ---------- КОРОБКА: ОДНА ----------
+if shape == "📦Коробка" and mode == "Одна посылка":
     st.subheader("Габариты посылки (см)")
+    l = st.number_input("Длина", min_value=0.0, value=20.0, step=1.0, key="b1_l")
+    w = st.number_input("Ширина", min_value=0.0, value=15.0, step=1.0, key="b1_w")
+    h = st.number_input("Высота", min_value=0.0, value=10.0, step=1.0, key="b1_h")
 
-    length_1 = st.number_input("Длина", min_value=0.0, value=20.0, step=1.0, key="l1")
-    width_1 = st.number_input("Ширина", min_value=0.0, value=15.0, step=1.0, key="w1")
-    height_1 = st.number_input("Высота", min_value=0.0, value=10.0, step=1.0, key="h1")
-
-    if st.button("Рассчитать стоимость", type="primary", use_container_width=True, key="btn1"):
-        if length_1 > 0 and width_1 > 0 and height_1 > 0:
-            volume = length_1 * width_1 * height_1
-            price = price_for_volume(volume)
-
-            st.success("🎉 Расчёт успешно завершён!")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="Объём посылки", value=f"{volume:.0f} см³")
-            with col2:
-                st.metric(label="Стоимость", value=f"{price} ₽")
-        else:
+    if st.button("Рассчитать стоимость", type="primary", use_container_width=True, key="btn_b1"):
+        if l <= 0 or w <= 0 or h <= 0:
             st.error("⚠️ Введите корректные размеры больше нуля!")
-
-# ---------- ВКЛАДКА 2 ----------
-with tab2:
-    st.subheader("Габариты одной коробки (cм) и их количество (шт)")
-
-    length_2 = st.number_input("Длина", min_value=0.0, value=20.0, step=1.0, key="l2")
-    width_2 = st.number_input("Ширина", min_value=0.0, value=15.0, step=1.0, key="w2")
-    height_2 = st.number_input("Высота", min_value=0.0, value=10.0, step=1.0, key="h2")
-    quantity_2 = st.number_input("Количество коробок", min_value=0, value=2, step=1, key="q2")
-
-    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn2"):
-        if quantity_2 == 0:
-            st.error("❌ Ошибка: Количество коробок не может быть равно 0!")
-        elif length_2 > 0 and width_2 > 0 and height_2 > 0:
-            single_volume = length_2 * width_2 * height_2
-            total_volume = single_volume * quantity_2
-            price = price_for_volume(total_volume)
-
+        else:
+            volume = volume_box(l, w, h)
+            price = price_for_volume(volume)
             st.success("🎉 Расчёт успешно завершён!")
             col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="Общий объём партии", value=f"{total_volume:.0f} см³")
-            with col2:
-                st.metric(label="Финальная стоимость", value=f"{price} ₽")
-            st.caption(f"Объем одной коробки: {single_volume:.0f} см³")
+            col1.metric(label="Объём посылки", value=f"{volume:.0f} см³")
+            col2.metric(label="Стоимость", value=f"{price} ₽")
+
+# ---------- КОРОБКА: НЕСКОЛЬКО ОДИНАКОВЫХ ----------
+elif shape == "📦Коробка" and mode == "Несколько одинаковых":
+    st.subheader("Габариты одной посылки (см) и их количество(шт)")
+    l = st.number_input("Длина", min_value=0.0, value=20.0, step=1.0, key="b2_l")
+    w = st.number_input("Ширина", min_value=0.0, value=15.0, step=1.0, key="b2_w")
+    h = st.number_input("Высота", min_value=0.0, value=10.0, step=1.0, key="b2_h")
+    qty = st.number_input("Количество", min_value=0, value=2, step=1, key="b2_q")
+
+    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn_b2"):
+        errors = []
+        if l <= 0 or w <= 0 or h <= 0:
+            errors.append("Введите корректные размеры больше нуля!")
+        if qty == 0:
+            errors.append("Количество не может быть 0!")
+
+        if errors:
+            st.error("⚠️ " + "; ".join(e.capitalize() for e in errors))
         else:
-            st.error("⚠️ Введите корректные размеры груза!")
+            single_volume = volume_box(l, w, h)
+            total_volume = single_volume * qty
+            price = price_for_volume(total_volume)
+            st.success("🎉 Расчёт успешно завершён!")
+            col1, col2 = st.columns(2)
+            col1.metric(label="Общий объём партии", value=f"{total_volume:.0f} см³")
+            col2.metric(label="Финальная стоимость", value=f"{price} ₽")
+            st.caption(f"Объем одной посылки: {single_volume:.0f} см³")
 
-# ---------- ВКЛАДКА 3 ----------
-with tab3:
-    st.subheader("Расчет посылок разного размера")
-
-    boxes_count = st.number_input("Общее количество посылок (шт)", min_value=0, value=2, step=1, key="box_count")
+# ---------- КОРОБКА: НЕСКОЛЬКО РАЗНЫХ ----------
+elif shape == "📦Коробка" and mode == "Несколько разных":
+    st.subheader("Количество посылок(шт) и их габариты(см)")
+    boxes_count = st.number_input(
+        "Количество",
+        min_value=0, value=2, step=1, key="b3_count"
+    )
     st.markdown("---")
 
     total_custom_volume = 0.0
@@ -178,46 +211,150 @@ with tab3:
     table_rows = []
 
     if boxes_count > 0:
-        st.write("### Габариты каждой посылки (см):")
         for i in range(int(boxes_count)):
             st.markdown(f"**📦 Посылка №{i+1}**")
-            col_l, col_w, col_h = st.columns(3)
-
-            with col_l:
-                l_curr = st.number_input(f"Длина #{i+1}", min_value=0.0, value=20.0, step=1.0, key=f"l_cust_{i}")
-            with col_w:
-                w_curr = st.number_input(f"Ширина #{i+1}", min_value=0.0, value=15.0, step=1.0, key=f"w_cust_{i}")
-            with col_h:
-                h_curr = st.number_input(f"Высота #{i+1}", min_value=0.0, value=10.0, step=1.0, key=f"h_cust_{i}")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                l_curr = st.number_input(
+                    f"Длина #{i+1}", min_value=0.0, value=20.0, step=1.0,
+                    key=f"b3_l_{i}"
+                )
+            with c2:
+                w_curr = st.number_input(
+                    f"Ширина #{i+1}", min_value=0.0, value=15.0, step=1.0,
+                    key=f"b3_w_{i}"
+                )
+            with c3:
+                h_curr = st.number_input(
+                    f"Высота #{i+1}", min_value=0.0, value=10.0, step=1.0,
+                    key=f"b3_h_{i}"
+                )
 
             if l_curr > 0 and w_curr > 0 and h_curr > 0:
-                box_v = l_curr * w_curr * h_curr
+                box_v = volume_box(l_curr, w_curr, h_curr)
                 total_custom_volume += box_v
                 table_rows.append({
                     "Номер": f"Посылка №{i+1}",
                     "Габариты (ДхШхВ, см)": f"{l_curr:.0f} x {w_curr:.0f} x {h_curr:.0f}",
-                    "Объем (см³)": int(box_v)
+                    "Объем (см³)": int(box_v),
                 })
             else:
                 valid_inputs = False
 
     st.markdown("---")
 
-    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn3"):
+    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn_b3"):
         if boxes_count == 0:
             st.error("❌ Ошибка: Количество посылок не может быть равно 0!")
-        elif valid_inputs and total_custom_volume > 0:
+        elif not valid_inputs or total_custom_volume <= 0:
+            st.error("⚠️ Убедитесь, что габариты всех посылок больше нуля!")
+        else:
             price = price_for_volume(total_custom_volume)
-
             st.success("🎉 Расчёт успешно завершён!")
             col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="Общий объём всех посылок", value=f"{total_custom_volume:.0f} см³")
-            with col2:
-                st.metric(label="Итоговая стоимость", value=f"{price} ₽")
+            col1.metric(label="Общий объём всех посылок", value=f"{total_custom_volume:.0f} см³")
+            col2.metric(label="Итоговая стоимость", value=f"{price} ₽")
 
             st.write("### 📋 Таблица посылок в заказе")
             df_summary = pd.DataFrame(table_rows)
             st.dataframe(df_summary, use_container_width=True, hide_index=True)
+
+# ---------- ЦИЛИНДР: ОДИН ----------
+elif shape == "🛢️Цилиндр(банка, ведро и тд)" and mode == "Одна посылка":
+    st.subheader("Габариты посылки (см)")
+    d = st.number_input("Диаметр", min_value=0.0, value=20.0, step=1.0, key="c1_d")
+    h = st.number_input("Высота / длина", min_value=0.0, value=40.0, step=1.0, key="c1_h")
+
+    if st.button("Рассчитать стоимость", type="primary", use_container_width=True, key="btn_c1"):
+        if d <= 0 or h <= 0:
+            st.error("⚠️ Введите корректные размеры больше нуля!")
         else:
-            st.error("⚠️ Пожалуйста, убедитесь, что габариты всех посылок больше нуля!")
+            volume = volume_cylinder(d, h)
+            price = price_for_volume(volume)
+            st.success("🎉 Расчёт успешно завершён!")
+            col1, col2 = st.columns(2)
+            col1.metric(label="Объём цилиндра", value=f"{volume:.0f} см³")
+            col2.metric(label="Стоимость", value=f"{price} ₽")
+            st.caption(f"⌀{d:.0f} × {h:.0f} см")
+
+# ---------- ЦИЛИНДР: НЕСКОЛЬКО ОДИНАКОВЫХ ----------
+elif shape == "🛢️Цилиндр(банка, ведро и тд)" and mode == "Несколько одинаковых":
+    st.subheader("Габариты одной посылки (см) и их количество (шт)")
+    d = st.number_input("Диаметр", min_value=0.0, value=20.0, step=1.0, key="c2_d")
+    h = st.number_input("Высота / длина", min_value=0.0, value=40.0, step=1.0, key="c2_h")
+    qty = st.number_input("Количество", min_value=0, value=2, step=1, key="c2_q")
+
+    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn_c2"):
+        errors = []
+        if d <= 0 or h <= 0:
+            errors.append("Введите корректные размеры больше нуля!")
+        if qty == 0:
+            errors.append("Количество не может быть 0!")
+
+        if errors:
+            st.error("⚠️ " + "; ".join(e.capitalize() for e in errors))
+        else:
+            single_volume = volume_cylinder(d, h)
+            total_volume = single_volume * qty
+            price = price_for_volume(total_volume)
+            st.success("🎉 Расчёт успешно завершён!")
+            col1, col2 = st.columns(2)
+            col1.metric(label=f"Общий объём ({qty} шт)", value=f"{total_volume:.0f} см³")
+            col2.metric(label="Финальная стоимость", value=f"{price} ₽")
+            st.caption(f"Объём одной посылки: {single_volume:.0f} см³")
+# ---------- ЦИЛИНДР: НЕСКОЛЬКО РАЗНЫХ ----------
+elif shape == "🛢️Цилиндр(банка, ведро и тд)" and mode == "Несколько разных":
+    st.subheader("Количество посылок(шт) и их габариты(см)")
+    cyls_count = st.number_input(
+        "Количество",
+        min_value=0, value=2, step=1, key="c3_count"
+    )
+    st.markdown("---")
+
+    total_custom_volume = 0.0
+    valid_inputs = True
+    table_rows = []
+
+    if cyls_count > 0:
+        for i in range(int(cyls_count)):
+            st.markdown(f"**🛢️ Посылка №{i+1}**")
+            c1, c2 = st.columns(2)
+            with c1:
+                d_curr = st.number_input(
+                    f"Диаметр #{i+1}", min_value=0.0, value=20.0, step=1.0,
+                    key=f"c3_d_{i}"
+                )
+            with c2:
+                h_curr = st.number_input(
+                    f"Высота #{i+1}", min_value=0.0, value=40.0, step=1.0,
+                    key=f"c3_h_{i}"
+                )
+
+            if d_curr > 0 and h_curr > 0:
+                cyl_v = volume_cylinder(d_curr, h_curr)
+                total_custom_volume += cyl_v
+                table_rows.append({
+                    "Номер": f"Посылка №{i+1}",
+                    "Габариты (⌀ × В, см)": f"⌀{d_curr:.0f} × {h_curr:.0f}",
+                    "Объем (см³)": int(cyl_v),
+                })
+            else:
+                valid_inputs = False
+
+    st.markdown("---")
+
+    if st.button("Рассчитать общую стоимость", type="primary", use_container_width=True, key="btn_c3"):
+        if cyls_count == 0:
+            st.error("❌ Ошибка: Количество не может быть равно 0!")
+        elif not valid_inputs or total_custom_volume <= 0:
+            st.error("⚠️ Убедитесь, что габариты больше нуля!")
+        else:
+            price = price_for_volume(total_custom_volume)
+            st.success("🎉 Расчёт успешно завершён!")
+            col1, col2 = st.columns(2)
+            col1.metric(label="Общий объём партии", value=f"{total_custom_volume:.0f} см³")
+            col2.metric(label="Итоговая стоимость", value=f"{price} ₽")
+
+            st.write("### 📋 Таблица посылок в заказе")
+            df_summary = pd.DataFrame(table_rows)
+            st.dataframe(df_summary, use_container_width=True, hide_index=True)
